@@ -67,7 +67,7 @@ async function captureBookMyShow(url, page) {
   );
 
   const tasks = [];
-  for (let i =423272; i <= 425000; i++) {
+  for (let i =423274; i <= 425000; i++) {
     const url = `https://in.bookmyshow.com/events/venugaan-a-dance-theater-via-bharatanatyam/ET00${i}`;
     tasks.push(limit(() => captureBookMyShow(url, page)));
 
