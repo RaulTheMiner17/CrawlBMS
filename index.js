@@ -67,12 +67,12 @@ async function captureBookMyShow(url, page) {
   );
 
   const tasks = [];
-  for (let i =423274; i <= 425000; i++) {
+  for (let i =423558; i <= 425000; i++) {
     const url = `https://in.bookmyshow.com/events/venugaan-a-dance-theater-via-bharatanatyam/ET00${i}`;
     tasks.push(limit(() => captureBookMyShow(url, page)));
 
     // Add a slight delay before processing the next URL
-    await new Promise(resolve => setTimeout(resolve, randomDelay(800, 1400))); // Delay before next URL
+    await new Promise(resolve => setTimeout(resolve, randomDelay(1000, 1400))); // Delay before next URL
   }
 
   // Process all tasks
@@ -84,3 +84,6 @@ async function captureBookMyShow(url, page) {
   console.error('Unhandled error in script:', error.message);
   fs.appendFileSync(ERROR_LOG_FILE, `Unhandled Error: ${error.message}\n`);
 });
+
+//booking-step/tickets?date=20241215&time=1800&venueCode=ATMH
+//booking-step/datetime
