@@ -34,9 +34,22 @@ const getLastSuccessfulID = () => {
   return INITIAL_ID;
 };
 
-// Utility: Update the last successful ID
-const updateLastSuccessfulID = (id) => {
-  fs.writeFileSync(LAST_SUCCESSFUL_FILE, id.toString(), 'utf8');
+// Utility: Update the last successful ID based on the last URL in opened_urls.txt
+const updateLastSuccessfulIDFromFile = () => {
+  if (fs.existsSync(URL_FILE)) {
+    const lines = fs.readFileSync(URL_FILE, 'utf8').split('\n').filter(Boolean);
+    if (lines.length > 0) {
+      const lastURL = lines[lines.length - 1];
+      const match = lastURL.match(/ET00(\d+)/); // Extract the ID from the URL
+      if (match) {
+        const nextID = parseInt(match[1], 10) + 1;
+        console.log(`[INFO] Updating last successful ID to: ${nextID}`);
+        fs.writeFileSync(LAST_SUCCESSFUL_FILE, nextID.toString(), 'utf8');
+        return;
+      }
+    }
+  }
+  console.log('[WARN] Could not update last successful ID from file.');
 };
 
 // Utility: Remove the last 10 occurrences of the specified pattern and add a new line
@@ -79,47 +92,54 @@ const removeLastOccurrences = (pattern, count) => {
 
   let currentID = getLastSuccessfulID();
   let similarURLCount = 0;
-  let firstOccurrenceID = null; // Track the first occurrence of the pattern
 
-  while (true) {
-    const url = `${FULL_URL_PATTERN}${currentID}`;
-    console.log(`[INFO] Checking URL: ${url}`);
+  const saveProgressAndExit = async () => {
+    console.log('[INFO] Gracefully exiting and saving progress...');
+    updateLastSuccessfulIDFromFile();
+    await browser.close();
+    process.exit(0);
+  };
 
-    try {
-      await page.goto(url, { waitUntil: 'domcontentloaded' });
-      const currentUrl = await page.url();
+  process.on('SIGINT', saveProgressAndExit);
+  process.on('SIGTERM', saveProgressAndExit);
 
-      if (currentUrl.includes('sorry')) {
-        console.log(`[NOT FOUND] URL does not exist: ${url}`);
-      } else {
-        fs.appendFileSync(URL_FILE, `${currentUrl}\n`);
-        console.log(`[SUCCESS] Captured URL: ${currentUrl}`);
+  try {
+    while (true) {
+      const url = `${FULL_URL_PATTERN}${currentID}`;
+      console.log(`[INFO] Checking URL: ${url}`);
 
-        if (currentUrl.includes(VENUGAAN_URL_PART)) {
-          similarURLCount++;
-          if (firstOccurrenceID === null) {
-            firstOccurrenceID = currentID; // Record the first occurrence ID
-          }
+      try {
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        const currentUrl = await page.url();
+
+        if (currentUrl.includes('sorry')) {
+          console.log(`[NOT FOUND] URL does not exist: ${url}`);
         } else {
-          similarURLCount = 0; // Reset count for unique URLs
-        }
+          fs.appendFileSync(URL_FILE, `${currentUrl}\n`);
+          console.log(`[SUCCESS] Captured URL: ${currentUrl}`);
 
-        if (similarURLCount >= 10) {
-          console.log(`[STOPPING] Found ${VENUGAAN_URL_PART} 10 times. Cleaning up and exiting.`);
-          removeLastOccurrences(FULL_URL_PATTERN, 10);
-          updateLastSuccessfulID(firstOccurrenceID); // Save the first occurrence ID
-          break;
+          if (currentUrl.includes(VENUGAAN_URL_PART)) {
+            similarURLCount++;
+          } else {
+            similarURLCount = 0; // Reset count for unique URLs
+          }
+
+          if (similarURLCount >= 10) {
+            console.log(`[STOPPING] Found ${VENUGAAN_URL_PART} 10 times. Cleaning up and exiting.`);
+            removeLastOccurrences(FULL_URL_PATTERN, 10);
+            updateLastSuccessfulIDFromFile();
+            break;
+          }
         }
+      } catch (error) {
+        console.error(`[ERROR] Failed for URL: ${url}, Error: ${error.message}`);
+        fs.appendFileSync(ERROR_LOG_FILE, `Failed URL: ${url}, Error: ${error.message}\n`);
       }
-    } catch (error) {
-      console.error(`[ERROR] Failed for URL: ${url}, Error: ${error.message}`);
-      fs.appendFileSync(ERROR_LOG_FILE, `Failed URL: ${url}, Error: ${error.message}\n`);
+
+      currentID++;
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // Delay to reduce server load
     }
-
-    currentID++;
-    await new Promise((resolve) => setTimeout(resolve, 1000)); // Delay to reduce server load
+  } finally {
+    saveProgressAndExit();
   }
-
-  await browser.close();
-  console.log('Script terminated.');
 })();
